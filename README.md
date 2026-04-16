@@ -1,6 +1,6 @@
 # NTFC Analytics — B2B SaaS Data Platform
 
-End-to-end analytics engineering project built on **dbt + Snowflake** for a B2B SaaS client based in Amsterdam. Client details have been anonymised under NDA. The project models raw product, billing, and support data into a clean analytical layer with 14 dbt models, 185 passing data quality tests, and business-ready mart tables covering MRR, churn risk, and feature adoption.
+End-to-end analytics engineering project built on **dbt + Snowflake** for a B2B SaaS client based in EU. Client details have been anonymised under NDA. The project models raw product, billing, and support data into a clean analytical layer with 14 dbt models, 185 passing data quality tests, and business-ready mart tables covering MRR, churn risk, and feature adoption.
 
 ---
 
