@@ -128,15 +128,13 @@ ntfc_analytics/
 - accepted_values on all categorical columns (plan names, statuses, platforms, industries)
 - relationships tests verifying referential integrity across tables
 
-![dbt Tests](screenshots/dbt_tests.png)
+![dbt Tests](screenshots/dbt_test.png)
 
 ---
 
 ## dbt Lineage
 
-![Lineage Full](screenshots/lineage_full.png)
-
-![Lineage Marts](screenshots/lineage_marts.png)
+![Lineage Full](screenshots/full_lineage2.png)
 
 ---
 
@@ -144,7 +142,7 @@ ntfc_analytics/
 
 ### Revenue Concentration
 
-![MRR by Plan](screenshots/mrr_by_plan.png)
+![MRR by Plan](screenshots/mrr_plan_distribution.png)
 
 The top 20% of customers by MRR generate 59.8% of total revenue — a healthier distribution than the classic Pareto 80/20 benchmark, indicating the client is not dangerously dependent on a small number of enterprise accounts.
 
@@ -195,7 +193,7 @@ The dataset reflects a real B2B SaaS business operating across European markets 
 ## Setup
 
 ### Prerequisites
-- Snowflake account (free trial works)
+- Snowflake account 
 - Python 3.8 or above
 - dbt Core with Snowflake adapter
 
@@ -223,6 +221,6 @@ dbt docs generate && dbt docs serve          # open lineage documentation
 
 ## Author
 
-**Wasim Sultani** — Data Analyst
+**Wasim Sultani** — Business and Data Analyst
 
 [Portfolio](https://fish-bovid-69e.notion.site/Wasim-Sultani-Business-Data-Analytics-Portfolio-2f53bf09407680c79a76c477e6ef0075) · [LinkedIn](https://linkedin.com/in/wasimsultani0530)
