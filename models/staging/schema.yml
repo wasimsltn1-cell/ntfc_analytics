@@ -1,0 +1,289 @@
+version: 2
+
+models:
+  - name: stg_companies
+    description: "Cleaned and typed company accounts from the raw source. One row per company that signed up to the Northflow platform."
+    columns:
+      - name: company_id
+        description: "Primary key. Unique identifier for each company account."
+        tests:
+          - not_null
+          - unique
+      - name: company_name
+        description: "Trading name of the company."
+        tests:
+          - not_null
+      - name: industry
+        description: "Industry vertical the company operates in."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Fintech', 'HR Tech', 'MarTech', 'DevTools', 'Legal Tech',
+                       'HealthTech', 'EdTech', 'E-commerce', 'Logistics Tech', 'PropTech']
+      - name: country
+        description: "Country where the company is based. All companies are European."
+        tests:
+          - not_null
+      - name: company_size
+        description: "Employee headcount band as reported at signup."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['1-10', '11-50', '51-200', '201-500', '500+']
+      - name: lead_source
+        description: "Marketing channel that brought this company to Northflow."
+        tests:
+          - not_null
+      - name: signup_date
+        description: "Date the company created their Northflow account."
+        tests:
+          - not_null
+      - name: is_active
+        description: "Whether the company account is currently active."
+        tests:
+          - not_null
+      - name: employee_count
+        description: "Numeric midpoint of the company_size band. Derived in staging via CASE statement for use in numeric filters and sorting."
+
+  - name: stg_subscriptions
+    description: "Cleaned subscription records. One row per subscription period. A company can have multiple rows if they upgraded or downgraded."
+    columns:
+      - name: subscription_id
+        description: "Primary key. Unique identifier for each subscription period."
+        tests:
+          - not_null
+          - unique
+      - name: company_id
+        description: "Foreign key to stg_companies."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_companies')
+              field: company_id
+      - name: plan_name
+        description: "Subscription tier the company is on."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Free Trial', 'Starter', 'Growth', 'Business', 'Enterprise']
+      - name: billing_cycle
+        description: "Whether the company pays monthly or annually."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['monthly', 'annual']
+      - name: mrr
+        description: "Monthly recurring revenue in USD for this subscription."
+        tests:
+          - not_null
+      - name: arr
+        description: "Annual recurring revenue in USD. Calculated as MRR multiplied by 12."
+        tests:
+          - not_null
+      - name: discount_pct
+        description: "Percentage discount applied to this subscription if any."
+      - name: start_date
+        description: "Date this subscription period began."
+        tests:
+          - not_null
+      - name: end_date
+        description: "Date this subscription period ended. NULL means the subscription is still active."
+      - name: status
+        description: "Current state of the subscription."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['active', 'churned', 'converted']
+      - name: seats_included
+        description: "Number of user seats included in this plan tier."
+        tests:
+          - not_null
+
+  - name: stg_users
+    description: "Cleaned user records. One row per individual user seat within a company account."
+    columns:
+      - name: user_id
+        description: "Primary key. Unique identifier for each user."
+        tests:
+          - not_null
+          - unique
+      - name: company_id
+        description: "Foreign key to stg_companies. The company this user belongs to."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_companies')
+              field: company_id
+      - name: role
+        description: "The user's permission role within their company account."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Admin', 'Editor', 'Viewer', 'Analyst', 'Developer']
+      - name: created_date
+        description: "Date this user account was created."
+        tests:
+          - not_null
+      - name: last_login_date
+        description: "Date the user last logged into the platform. NULL if the user has never logged in."
+      - name: is_active
+        description: "Whether this user account is currently active."
+        tests:
+          - not_null
+      - name: email_verified
+        description: "Whether the user has verified their email address."
+        tests:
+          - not_null
+      - name: country
+        description: "Country of the user. Inherited from their company account."
+        tests:
+          - not_null
+
+  - name: stg_events
+    description: "Cleaned product usage events. One row per user action taken inside the Northflow platform. This is the largest table at approximately 838k rows."
+    columns:
+      - name: event_id
+        description: "Primary key. Unique identifier for each event."
+        tests:
+          - not_null
+          - unique
+      - name: user_id
+        description: "Foreign key to stg_users. The user who triggered this event."
+        tests:
+          - not_null
+      - name: company_id
+        description: "Foreign key to stg_companies. Denormalised from the user for query convenience."
+        tests:
+          - not_null
+      - name: feature
+        description: "The product feature the user interacted with."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['dashboard_view', 'report_create', 'report_export', 'user_invite',
+                       'integration_connect', 'api_call', 'data_import', 'data_export',
+                       'filter_apply', 'search', 'comment_add', 'notification_view',
+                       'settings_update', 'billing_view', 'support_open']
+      - name: platform
+        description: "The platform the user was on when the event was triggered."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['web', 'mobile_ios', 'mobile_android', 'api']
+      - name: event_date
+        description: "Date the event occurred."
+        tests:
+          - not_null
+      - name: event_month
+        description: "Month the event occurred formatted as YYYY-MM. Pre-aggregated for monthly trend queries."
+        tests:
+          - not_null
+      - name: session_duration_sec
+        description: "Duration of the session in seconds when this event was triggered."
+        tests:
+          - not_null
+      - name: is_error
+        description: "Whether this event resulted in an error. Used to calculate feature error rates."
+        tests:
+          - not_null
+
+  - name: stg_invoices
+    description: "Cleaned invoice records. One row per invoice issued to a company. Monthly billing cycle companies have one invoice per month. Annual companies have one invoice per year."
+    columns:
+      - name: invoice_id
+        description: "Primary key. Unique identifier for each invoice."
+        tests:
+          - not_null
+          - unique
+      - name: subscription_id
+        description: "Foreign key to stg_subscriptions. The subscription this invoice was raised against."
+        tests:
+          - not_null
+      - name: company_id
+        description: "Foreign key to stg_companies."
+        tests:
+          - not_null
+      - name: invoice_date
+        description: "Date the invoice was issued."
+        tests:
+          - not_null
+      - name: due_date
+        description: "Date payment was due."
+        tests:
+          - not_null
+      - name: amount_usd
+        description: "Invoice amount in USD before tax."
+        tests:
+          - not_null
+      - name: tax_pct
+        description: "VAT or tax rate applied. Varies by European country."
+        tests:
+          - not_null
+      - name: payment_method
+        description: "Payment method used by the company."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['credit_card', 'bank_transfer', 'PayPal', 'SEPA_debit']
+      - name: payment_status
+        description: "Current status of the invoice payment."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['paid', 'overdue', 'failed', 'refunded']
+      - name: paid_date
+        description: "Date payment was received. NULL if payment has not been made."
+
+  - name: stg_supporttickets
+    description: "Cleaned support ticket records. One row per ticket raised by a company user. Used for customer health and churn risk analysis."
+    columns:
+      - name: ticket_id
+        description: "Primary key. Unique identifier for each support ticket."
+        tests:
+          - not_null
+          - unique
+      - name: company_id
+        description: "Foreign key to stg_companies. The company that raised the ticket."
+        tests:
+          - not_null
+      - name: user_id
+        description: "Foreign key to stg_users. The specific user who raised the ticket."
+        tests:
+          - not_null
+      - name: category
+        description: "The type of issue the ticket relates to."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Billing', 'Technical Bug', 'Feature Request', 'Onboarding',
+                       'Integration', 'Account Access', 'Performance', 'Data Export']
+      - name: priority
+        description: "Urgency level assigned to the ticket."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['low', 'medium', 'high', 'critical']
+      - name: channel
+        description: "How the customer contacted support."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['email', 'in_app', 'live_chat', 'phone']
+      - name: status
+        description: "Current state of the ticket."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['resolved', 'open', 'in_progress', 'closed_no_reply']
+      - name: created_date
+        description: "Date the ticket was opened."
+        tests:
+          - not_null
+      - name: resolved_hours
+        description: "Number of hours it took to resolve the ticket. NULL if ticket is still open."
+      - name: csat_score
+        description: "Customer satisfaction score from 1 to 5 given after resolution. NULL if ticket was not resolved or customer did not respond."
+      - name: first_response_hours
+        description: "Number of hours before support sent the first reply."
+        tests:
+          - not_null

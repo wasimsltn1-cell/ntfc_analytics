@@ -1,0 +1,517 @@
+version: 2
+
+models:
+  - name: dim_companies
+    description: "One row per company account. Enriched with subscription context including current plan, MRR, and ARR. Primary dimension table used across all mart models."
+    columns:
+      - name: company_id
+        description: "Primary key. Unique identifier for each company account."
+        tests:
+          - not_null
+          - unique
+      - name: company_name
+        description: "Trading name of the company."
+        tests:
+          - not_null
+      - name: industry
+        description: "Industry vertical the company operates in."
+        tests:
+          - not_null
+      - name: country
+        description: "Country where the company is based."
+        tests:
+          - not_null
+      - name: company_size
+        description: "Employee headcount band as reported at signup."
+        tests:
+          - not_null
+      - name: employee_count
+        description: "Numeric midpoint of the company_size band. Derived via CASE statement for use in numeric filters and sorting in dashboards."
+      - name: lead_source
+        description: "Marketing channel that brought this company to Northflow."
+        tests:
+          - not_null
+      - name: signup_date
+        description: "Date the company created their Northflow account."
+        tests:
+          - not_null
+      - name: is_active
+        description: "Whether the company account is currently active."
+        tests:
+          - not_null
+      - name: current_plan
+        description: "The most recent plan name across all subscriptions for this company. NULL if the company has never subscribed."
+      - name: current_mrr
+        description: "The highest MRR value across all subscriptions for this company in USD."
+      - name: current_arr
+        description: "Annual recurring revenue in USD. Derived from current MRR."
+      - name: total_subscriptions
+        description: "Total number of subscription periods this company has had including trials, upgrades and downgrades."
+      - name: active_subscriptions
+        description: "Number of currently active subscriptions for this company."
+
+  - name: dim_users
+    description: "One row per user seat. Enriched with company context. Used for user level analysis and engagement tracking."
+    columns:
+      - name: user_id
+        description: "Primary key. Unique identifier for each user."
+        tests:
+          - not_null
+          - unique
+      - name: company_id
+        description: "Foreign key to dim_companies."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_companies')
+              field: company_id
+      - name: role
+        description: "The user's permission role within their company account."
+        tests:
+          - not_null
+      - name: created_date
+        description: "Date this user account was created."
+        tests:
+          - not_null
+      - name: last_login_date
+        description: "Date the user last logged in. NULL if the user has never logged in."
+      - name: is_active
+        description: "Whether this user account is currently active."
+        tests:
+          - not_null
+      - name: email_verified
+        description: "Whether the user has verified their email address."
+        tests:
+          - not_null
+      - name: company_name
+        description: "Trading name of the company this user belongs to. Denormalised from dim_companies for query convenience."
+        tests:
+          - not_null
+      - name: industry
+        description: "Industry of the company this user belongs to."
+        tests:
+          - not_null
+      - name: company_size
+        description: "Size band of the company this user belongs to."
+        tests:
+          - not_null
+      - name: current_plan
+        description: "Current subscription plan of the company this user belongs to."
+      - name: days_since_last_login
+        description: "Number of days between the user's last login and today. Calculated at query time using current_date(). In a production pipeline this would use the pipeline execution date to avoid drift when data is not loaded incrementally."
+
+  - name: fct_subscriptions
+    description: "One row per subscription period. Core revenue table joining subscription detail with company context. Used for MRR, churn, and plan analysis."
+    columns:
+      - name: subscription_id
+        description: "Primary key. Unique identifier for each subscription period."
+        tests:
+          - not_null
+          - unique
+      - name: company_id
+        description: "Foreign key to dim_companies."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_companies')
+              field: company_id
+      - name: company_name
+        description: "Trading name of the company. Denormalised for query convenience."
+        tests:
+          - not_null
+      - name: industry
+        description: "Industry of the company."
+        tests:
+          - not_null
+      - name: country
+        description: "Country of the company."
+        tests:
+          - not_null
+      - name: company_size
+        description: "Size band of the company."
+        tests:
+          - not_null
+      - name: employee_count
+        description: "Numeric midpoint of the company size band."
+      - name: lead_source
+        description: "Marketing channel that acquired this company."
+        tests:
+          - not_null
+      - name: plan_name
+        description: "Subscription tier for this period."
+        tests:
+          - not_null
+      - name: billing_cycle
+        description: "Whether the company pays monthly or annually."
+        tests:
+          - not_null
+      - name: mrr
+        description: "Monthly recurring revenue in USD for this subscription period."
+        tests:
+          - not_null
+      - name: arr
+        description: "Annual recurring revenue in USD for this subscription period."
+        tests:
+          - not_null
+      - name: discount_pct
+        description: "Percentage discount applied to this subscription."
+      - name: start_date
+        description: "Date this subscription period began."
+        tests:
+          - not_null
+      - name: end_date
+        description: "Date this subscription period ended. NULL if still active."
+      - name: status
+        description: "Current state of the subscription."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['active', 'churned', 'converted']
+      - name: seats_included
+        description: "Number of user seats included in this plan."
+        tests:
+          - not_null
+      - name: is_churned
+        description: "Binary flag. 1 if the subscription status is churned, 0 otherwise."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      - name: is_annual
+        description: "Binary flag. 1 if the billing cycle is annual, 0 if monthly."
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      - name: subscription_length_days
+        description: "Number of days the subscription has been or was active. Uses end_date if churned or current_date if still active."
+
+  - name: fct_events
+    description: "One row per product usage event. Largest table at approximately 838k rows. Joined with user and company context for slicing by plan, industry, country and role."
+    columns:
+      - name: event_id
+        description: "Primary key. Unique identifier for each event."
+        tests:
+          - not_null
+          - unique
+      - name: user_id
+        description: "Foreign key to dim_users. The user who triggered this event."
+        tests:
+          - not_null
+      - name: company_id
+        description: "Foreign key to dim_companies. Denormalised from the user."
+        tests:
+          - not_null
+      - name: user_role
+        description: "Permission role of the user who triggered the event."
+      - name: user_is_active
+        description: "Whether the user who triggered the event is currently active."
+      - name: company_name
+        description: "Trading name of the company."
+      - name: industry
+        description: "Industry of the company."
+      - name: country
+        description: "Country of the company."
+      - name: company_size
+        description: "Size band of the company."
+      - name: current_plan
+        description: "Current subscription plan of the company."
+      - name: feature
+        description: "The product feature the user interacted with."
+        tests:
+          - not_null
+      - name: platform
+        description: "Platform the event was triggered from."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['web', 'mobile_ios', 'mobile_android', 'api']
+      - name: event_date
+        description: "Date the event occurred."
+        tests:
+          - not_null
+      - name: event_month
+        description: "Month the event occurred formatted as YYYY-MM."
+        tests:
+          - not_null
+      - name: session_duration_sec
+        description: "Session duration in seconds when this event was triggered."
+        tests:
+          - not_null
+      - name: session_duration_min
+        description: "Session duration converted to minutes. Rounded to 2 decimal places for dashboard readability."
+        tests:
+          - not_null
+      - name: is_error
+        description: "Whether this event resulted in an error."
+        tests:
+          - not_null
+
+  - name: fct_invoices
+    description: "One row per invoice. Billing records joined with subscription and company context. Used for revenue collection, payment behaviour and tax analysis."
+    columns:
+      - name: invoice_id
+        description: "Primary key. Unique identifier for each invoice."
+        tests:
+          - not_null
+          - unique
+      - name: subscription_id
+        description: "Foreign key to fct_subscriptions."
+        tests:
+          - not_null
+      - name: company_id
+        description: "Foreign key to dim_companies."
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_companies')
+              field: company_id
+      - name: company_name
+        description: "Trading name of the company."
+        tests:
+          - not_null
+      - name: industry
+        description: "Industry of the company."
+        tests:
+          - not_null
+      - name: country
+        description: "Country of the company. Used for tax rate analysis as VAT varies by European country."
+        tests:
+          - not_null
+      - name: company_size
+        description: "Size band of the company."
+        tests:
+          - not_null
+      - name: plan_name
+        description: "Subscription plan this invoice was raised against."
+      - name: billing_cycle
+        description: "Whether the invoice is for a monthly or annual subscription."
+      - name: invoice_date
+        description: "Date the invoice was issued."
+        tests:
+          - not_null
+      - name: due_date
+        description: "Date payment was due."
+        tests:
+          - not_null
+      - name: amount_usd
+        description: "Invoice amount in USD before tax."
+        tests:
+          - not_null
+      - name: tax_pct
+        description: "VAT or tax rate applied as a percentage."
+        tests:
+          - not_null
+      - name: tax_amount
+        description: "Tax amount in USD. Calculated as amount_usd multiplied by tax_pct divided by 100."
+        tests:
+          - not_null
+      - name: total_amount_with_tax
+        description: "Total invoice amount in USD including tax."
+        tests:
+          - not_null
+      - name: payment_method
+        description: "Payment method used."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['credit_card', 'bank_transfer', 'PayPal', 'SEPA_debit']
+      - name: payment_status
+        description: "Current payment status of the invoice."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['paid', 'overdue', 'failed', 'refunded']
+      - name: paid_date
+        description: "Date payment was received. NULL if not yet paid."
+      - name: is_overdue
+        description: "Binary flag. 1 if payment status is overdue, 0 otherwise."
+        tests:
+          - not_null
+      - name: is_failed
+        description: "Binary flag. 1 if payment status is failed, 0 otherwise."
+        tests:
+          - not_null
+      - name: days_to_pay
+        description: "Number of days between invoice date and paid date. NULL if invoice has not been paid."
+
+  - name: fct_mrr_monthly
+    description: "One row per subscription per month. Tracks MRR over time with plan level aggregations and cumulative totals. Primary model for revenue trend analysis."
+    columns:
+      - name: month
+        description: "First day of the month this record relates to. Derived using date_trunc on subscription start date."
+        tests:
+          - not_null
+      - name: company_id
+        description: "Foreign key to dim_companies."
+        tests:
+          - not_null
+      - name: company_name
+        description: "Trading name of the company."
+        tests:
+          - not_null
+      - name: industry
+        description: "Industry of the company."
+        tests:
+          - not_null
+      - name: country
+        description: "Country of the company."
+        tests:
+          - not_null
+      - name: company_size
+        description: "Size band of the company."
+        tests:
+          - not_null
+      - name: plan_name
+        description: "Subscription plan for this record."
+        tests:
+          - not_null
+      - name: billing_cycle
+        description: "Whether the subscription is monthly or annual."
+        tests:
+          - not_null
+      - name: status
+        description: "Status of the subscription."
+        tests:
+          - not_null
+      - name: mrr
+        description: "Monthly recurring revenue in USD for this subscription."
+        tests:
+          - not_null
+      - name: arr
+        description: "Annual recurring revenue in USD for this subscription."
+        tests:
+          - not_null
+      - name: plan_mrr_for_month
+        description: "Total MRR for all subscriptions on the same plan in the same month. Calculated using a window function partitioned by month and plan name."
+        tests:
+          - not_null
+      - name: cumulative_mrr
+        description: "Running total of MRR from the earliest subscription to the current row. Calculated using a window function ordered by month. Represents the SaaS growth curve over time."
+        tests:
+          - not_null
+
+  - name: churn_risk
+    description: "One row per active company with a paid subscription. Scores each company on churn risk using four signals: product inactivity, failed payments, open support tickets, and single user dependency."
+    columns:
+      - name: company_id
+        description: "Primary key. Unique identifier for each company."
+        tests:
+          - not_null
+          - unique
+      - name: company_name
+        description: "Trading name of the company."
+        tests:
+          - not_null
+      - name: industry
+        description: "Industry of the company."
+        tests:
+          - not_null
+      - name: country
+        description: "Country of the company."
+        tests:
+          - not_null
+      - name: current_plan
+        description: "Current subscription plan of the company."
+        tests:
+          - not_null
+      - name: current_mrr
+        description: "Current monthly recurring revenue from this company in USD."
+      - name: company_size
+        description: "Size band of the company."
+        tests:
+          - not_null
+      - name: last_event_date
+        description: "Date of the most recent product usage event from any user at this company."
+      - name: total_events
+        description: "Total number of product usage events recorded for this company."
+      - name: unique_active_users
+        description: "Number of distinct users at this company who have triggered at least one event."
+      - name: days_since_last_activity
+        description: "Number of days since any user at this company last used the product. Key input to the churn risk score."
+      - name: open_ticket_count
+        description: "Number of support tickets with status open or in_progress. 0 if no open tickets."
+      - name: failed_invoice_count
+        description: "Number of invoices with status failed or overdue. 0 if no payment issues."
+      - name: activity_score
+        description: "Inactivity score from 0 to 3. 1 point for 7 to 14 days inactive, 2 for 14 to 30 days, 3 for 30 plus days."
+        tests:
+          - not_null
+      - name: payment_score
+        description: "Payment health score. 2 points if any failed or overdue invoices exist, 0 otherwise."
+        tests:
+          - not_null
+      - name: support_score
+        description: "Support burden score. 1 point if more than 2 open tickets exist, 0 otherwise."
+        tests:
+          - not_null
+      - name: single_user_score
+        description: "User dependency score. 1 point if only one active user at the company, 0 otherwise."
+        tests:
+          - not_null
+      - name: churn_risk_score
+        description: "Total churn risk score. Sum of activity, payment, support and single user scores. Maximum possible score is 7."
+        tests:
+          - not_null
+      - name: churn_risk_label
+        description: "Human readable risk classification. High for score 4 and above, medium for 2 to 3, low for 0 to 1."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['high', 'medium', 'low']
+
+  - name: feature_adoption
+    description: "One row per feature per month per plan per industry per country per company size. Aggregates product usage events to show feature adoption, error rates, session engagement and platform breakdown."
+    columns:
+      - name: feature
+        description: "The product feature this row relates to."
+        tests:
+          - not_null
+      - name: event_month
+        description: "Month of the events in YYYY-MM format."
+        tests:
+          - not_null
+      - name: current_plan
+        description: "Subscription plan of the companies using this feature."
+      - name: industry
+        description: "Industry of the companies using this feature."
+      - name: country
+        description: "Country of the companies using this feature."
+      - name: company_size
+        description: "Size band of the companies using this feature."
+      - name: total_events
+        description: "Total number of times this feature was triggered in this segment and month."
+        tests:
+          - not_null
+      - name: unique_users
+        description: "Number of distinct users who used this feature in this segment and month."
+        tests:
+          - not_null
+      - name: unique_companies
+        description: "Number of distinct companies whose users used this feature in this segment and month."
+        tests:
+          - not_null
+      - name: error_rate_pct
+        description: "Percentage of events for this feature that resulted in an error. High values signal product bugs or UX problems."
+        tests:
+          - not_null
+      - name: avg_session_duration_min
+        description: "Average session duration in minutes when this feature was used. Higher values indicate deeper engagement."
+        tests:
+          - not_null
+      - name: web_events
+        description: "Number of events triggered from the web platform."
+        tests:
+          - not_null
+      - name: ios_events
+        description: "Number of events triggered from the iOS mobile app."
+        tests:
+          - not_null
+      - name: android_events
+        description: "Number of events triggered from the Android mobile app."
+        tests:
+          - not_null
+      - name: api_events
+        description: "Number of events triggered via the API."
+        tests:
+          - not_null

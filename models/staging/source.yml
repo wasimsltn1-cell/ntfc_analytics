@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: raw
+    database: NTFC_ANALYTICS
+    schema: RAW
+    tables:
+      - name: raw_companies
+      - name: raw_subscriptions
+      - name: raw_users
+      - name: raw_events
+      - name: raw_invoices
+      - name: raw_support_tickets
