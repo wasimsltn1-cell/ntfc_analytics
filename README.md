@@ -190,6 +190,22 @@ The dataset reflects a real B2B SaaS business operating across European markets 
 
 ---
 
+## Deliverables
+
+The analytical work was packaged into a formal Business Intelligence Report
+presented to the client leadership team at the conclusion of the engagement.
+The report covers revenue performance and concentration analysis, customer
+retention risk assessment, product engagement and feature utilisation,
+customer portfolio segmentation, and five strategic recommendations each
+mapped to a responsible team with data-grounded rationale.
+
+| Document | Description |
+|---|---|
+| [NTFC BI Report FY2025]([NTFC-Analytics]-2025.pdf) | Full client-facing report — revenue, churn, feature adoption, recommendations |
+
+> Client details anonymised under NDA. All company names and identifiers
+> replaced with generic alphanumeric sequences.
+
 ## Setup
 
 ### Prerequisites
